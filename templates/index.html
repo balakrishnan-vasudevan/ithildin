@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ithildin — Observability as Code</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            background: #0d1117;
+            color: #e6edf3;
+            min-height: 100vh;
+        }
+
+        header {
+            border-bottom: 1px solid #21262d;
+            padding: 20px 40px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        header h1 {
+            font-size: 20px;
+            font-weight: 600;
+            color: #f0f6fc;
+            letter-spacing: -0.5px;
+        }
+
+        header p {
+            font-size: 13px;
+            color: #8b949e;
+            font-family: -apple-system, sans-serif;
+        }
+
+        .rune {
+            font-size: 28px;
+            color: #58a6ff;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+
+        .tagline {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .tagline h2 {
+            font-size: 28px;
+            font-weight: 600;
+            color: #f0f6fc;
+            font-family: -apple-system, sans-serif;
+            margin-bottom: 8px;
+        }
+
+        .tagline p {
+            color: #8b949e;
+            font-size: 15px;
+            font-family: -apple-system, sans-serif;
+        }
+
+        .form-card {
+            background: #161b22;
+            border: 1px solid #21262d;
+            border-radius: 12px;
+            padding: 32px;
+            margin-bottom: 32px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr auto;
+            gap: 16px;
+            align-items: end;
+        }
+
+        .field label {
+            display: block;
+            font-size: 12px;
+            color: #8b949e;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .field input, .field select {
+            width: 100%;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 10px 14px;
+            color: #e6edf3;
+            font-family: 'SF Mono', monospace;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .field input:focus, .field select:focus {
+            border-color: #58a6ff;
+        }
+
+        .field input::placeholder {
+            color: #484f58;
+        }
+
+        .field select option {
+            background: #161b22;
+        }
+
+        button[type="submit"] {
+            background: #238636;
+            border: 1px solid #2ea043;
+            color: #fff;
+            padding: 10px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background 0.2s;
+            font-family: -apple-system, sans-serif;
+        }
+
+        button[type="submit"]:hover {
+            background: #2ea043;
+        }
+
+        button[type="submit"]:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .results {
+            display: none;
+        }
+
+        .results.visible {
+            display: block;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid #21262d;
+            margin-bottom: 0;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            font-size: 13px;
+            color: #8b949e;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+            font-family: -apple-system, sans-serif;
+            transition: color 0.2s;
+        }
+
+        .tab:hover { color: #e6edf3; }
+
+        .tab.active {
+            color: #f0f6fc;
+            border-bottom-color: #f78166;
+        }
+
+        .tab-content {
+            display: none;
+            background: #161b22;
+            border: 1px solid #21262d;
+            border-top: none;
+            border-radius: 0 0 12px 12px;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid #21262d;
+        }
+
+        .code-label {
+            font-size: 12px;
+            color: #8b949e;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .copy-btn {
+            background: transparent;
+            border: 1px solid #30363d;
+            color: #8b949e;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            font-family: -apple-system, sans-serif;
+            transition: all 0.2s;
+        }
+
+        .copy-btn:hover {
+            border-color: #58a6ff;
+            color: #58a6ff;
+        }
+
+        .copy-btn.copied {
+            border-color: #238636;
+            color: #2ea043;
+        }
+
+        pre {
+            padding: 20px;
+            overflow-x: auto;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #e6edf3;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+            color: #8b949e;
+            font-family: -apple-system, sans-serif;
+        }
+
+        .loading.visible { display: block; }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #21262d;
+            border-top-color: #58a6ff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error-msg {
+            display: none;
+            background: #1f1316;
+            border: 1px solid #f85149;
+            border-radius: 8px;
+            padding: 16px;
+            color: #f85149;
+            font-family: -apple-system, sans-serif;
+            font-size: 14px;
+            margin-top: 16px;
+        }
+
+        .error-msg.visible { display: block; }
+
+        .pill {
+            display: inline-block;
+            background: #1f2d1f;
+            color: #3fb950;
+            border: 1px solid #238636;
+            border-radius: 20px;
+            padding: 2px 10px;
+            font-size: 11px;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
+        footer {
+            text-align: center;
+            padding: 40px;
+            color: #484f58;
+            font-size: 12px;
+            font-family: -apple-system, sans-serif;
+        }
+
+        footer a { color: #58a6ff; text-decoration: none; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="rune">ᚱ</div>
+    <div>
+        <h1>Ithildin <span class="pill">v0.1</span></h1>
+        <p>Observability as Code — SLO rule generator</p>
+    </div>
+</header>
+
+<div class="container">
+    <div class="tagline">
+        <h2>Generate production-grade SLO rules instantly</h2>
+        <p>Input your service definition. Get Prometheus recording rules, multi-burn-rate alerts, and a Grafana dashboard.</p>
+    </div>
+
+    <div class="form-card">
+        <form id="generate-form">
+            <div class="form-grid">
+                <div class="field">
+                    <label>Service Name</label>
+                    <input type="text" name="service" placeholder="payment-api" required />
+                </div>
+                <div class="field">
+                    <label>SLO Target (%)</label>
+                    <input type="number" name="slo" placeholder="99.9" min="90" max="99.999" step="0.001" required />
+                </div>
+                <div class="field">
+                    <label>Error Budget Window</label>
+                    <select name="window">
+                        <option value="7d">7 days</option>
+                        <option value="30d" selected>30 days</option>
+                        <option value="90d">90 days</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <button type="submit" id="submit-btn">Generate</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <div class="loading" id="loading">
+        <span class="spinner"></span> Generating rules...
+    </div>
+
+    <div class="error-msg" id="error-msg"></div>
+
+    <div class="results" id="results">
+        <div class="tabs">
+            <div class="tab active" data-tab="recording">Recording Rules</div>
+            <div class="tab" data-tab="alerting">Alerting Rules</div>
+            <div class="tab" data-tab="grafana">Grafana Dashboard</div>
+        </div>
+
+        <div class="tab-content active" id="tab-recording">
+            <div class="code-header">
+                <span class="code-label">prometheus-recording-rules.yaml</span>
+                <button class="copy-btn" data-target="recording-code">Copy</button>
+            </div>
+            <pre id="recording-code"></pre>
+        </div>
+
+        <div class="tab-content" id="tab-alerting">
+            <div class="code-header">
+                <span class="code-label">prometheus-alerting-rules.yaml</span>
+                <button class="copy-btn" data-target="alerting-code">Copy</button>
+            </div>
+            <pre id="alerting-code"></pre>
+        </div>
+
+        <div class="tab-content" id="tab-grafana">
+            <div class="code-header">
+                <span class="code-label">grafana-dashboard.json</span>
+                <button class="copy-btn" data-target="grafana-code">Copy</button>
+            </div>
+            <pre id="grafana-code"></pre>
+        </div>
+    </div>
+</div>
+
+<footer>
+    Built with <a href="https://github.com/balakrishnanvasudevan/ithildin" target="_blank">Ithildin</a> — the moon-letters reveal what is hidden
+</footer>
+
+<script>
+    const form = document.getElementById('generate-form');
+    const results = document.getElementById('results');
+    const loading = document.getElementById('loading');
+    const errorMsg = document.getElementById('error-msg');
+    const submitBtn = document.getElementById('submit-btn');
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const data = new FormData(form);
+
+        results.classList.remove('visible');
+        errorMsg.classList.remove('visible');
+        loading.classList.add('visible');
+        submitBtn.disabled = true;
+
+        try {
+            const res = await fetch('/generate', { method: 'POST', body: data });
+            if (!res.ok) throw new Error('Generation failed');
+            const json = await res.json();
+
+            document.getElementById('recording-code').textContent = json.recording_rules;
+            document.getElementById('alerting-code').textContent = json.alerting_rules;
+            document.getElementById('grafana-code').textContent = json.grafana_dashboard;
+
+            results.classList.add('visible');
+        } catch (err) {
+            errorMsg.textContent = 'Something went wrong. Please try again.';
+            errorMsg.classList.add('visible');
+        } finally {
+            loading.classList.remove('visible');
+            submitBtn.disabled = false;
+        }
+    });
+
+    // Tabs
+    document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            tab.classList.add('active');
+            document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+        });
+    });
+
+    // Copy buttons
+    document.querySelectorAll('.copy-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const target = document.getElementById(btn.dataset.target);
+            navigator.clipboard.writeText(target.textContent).then(() => {
+                btn.textContent = 'Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.textContent = 'Copy';
+                    btn.classList.remove('copied');
+                }, 2000);
+            });
+        });
+    });
+</script>
+
+</body>
+</html>
