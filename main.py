@@ -2,10 +2,16 @@ from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 import uvicorn
 import json
 
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="Ithildin - Observability as Code")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 templates = Jinja2Templates(directory="templates")
 
 def generate_recording_rules(service: str, slo: float, window: str = "30d") -> dict:
@@ -136,7 +142,9 @@ async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 @app.post("/generate", response_class=JSONResponse)
+@limiter.limit("20/minute")
 async def generate(
+    request: Request,
     service: str = Form(...),
     slo: float = Form(...),
     window: str = Form("30d")
