@@ -7,11 +7,28 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import uvicorn
 import json
+import logging
+import time
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger("ithildin")
 
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="Ithildin - Observability as Code")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.time()
+    response = await call_next(request)
+    duration_ms = round((time.time() - start) * 1000)
+    logger.info(
+        "%s %s status=%d ip=%s duration=%dms",
+        request.method, request.url.path,
+        response.status_code, request.client.host, duration_ms
+    )
+    return response
 templates = Jinja2Templates(directory="templates")
 
 def generate_recording_rules(service: str, slo: float, window: str = "30d") -> dict:
@@ -149,6 +166,7 @@ async def generate(
     slo: float = Form(...),
     window: str = Form("30d")
 ):
+    logger.info("generate service=%s slo=%s window=%s ip=%s", service, slo, window, request.client.host)
     recording = generate_recording_rules(service, slo, window)
     alerting = generate_alerting_rules(service, slo, window)
     dashboard = generate_grafana_dashboard(service, slo)
