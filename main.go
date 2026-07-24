@@ -76,7 +76,8 @@ func cleanupVisitors() {
 // clientIP extracts the real client IP, accounting for Render's proxy.
 func clientIP(r *http.Request) string {
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		return strings.TrimSpace(strings.SplitN(xff, ",", 2)[0])
+		parts := strings.Split(xff, ",")
+		return strings.TrimSpace(parts[len(parts)-1])
 	}
 	if xri := r.Header.Get("X-Real-Ip"); xri != "" {
 		return xri
