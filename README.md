@@ -4,6 +4,8 @@
 
 Ithildin is an Observability as Code tool that generates production-grade SLO artifacts from a simple service definition.
 
+Live at: https://ithildin.onrender.com
+
 ## What it does
 
 Input a service name and SLO target. Get:
@@ -16,18 +18,35 @@ Input a service name and SLO target. Get:
 
 Most teams define SLOs in a doc somewhere and then manually wire up Prometheus rules and Grafana dashboards. This creates drift, inconsistency, and toil. Ithildin treats your SLO definition as the source of truth and generates everything downstream from it automatically.
 
+## Using with terraform-k8s-argus
+
+If you use the [Argus Terraform module](https://github.com/balakrishnan-vasudevan/terraform-k8s-argus) to manage your Kubernetes observability stack, you can feed Ithildin's output directly into Prometheus:
+
+```hcl
+module "argus" {
+  source         = "github.com/balakrishnan-vasudevan/terraform-k8s-argus//aws"
+  ithildin_rules = file("${path.module}/slo-rules.yaml")
+  # ...
+}
+```
+
+Download the recording rules YAML from the UI and pass it as `ithildin_rules`. Argus loads it into kube-prometheus-stack via `additionalPrometheusRulesMap`.
+
 ## Tech stack
 
-- Python / FastAPI
-- Jinja2 templates
-- PyYAML for rule generation
-- Deployed on Render
+- Go (`net/http`, `log/slog`)
+- `gopkg.in/yaml.v3` for rule generation
+- `golang.org/x/time/rate` for per-IP rate limiting
+- Deployed on Render (free tier — ~10ms cold start)
 
 ## Running locally
 
 ```bash
-pip install -r requirements.txt
-uvicorn main:app --reload
+go run .
 ```
 
 Open http://localhost:8000
+
+## Rate limiting
+
+The `/generate` endpoint is limited to 20 requests per minute per IP.
