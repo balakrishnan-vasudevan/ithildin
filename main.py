@@ -12,6 +12,9 @@ import time
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("ithildin")
+logging.getLogger("uvicorn.access").disabled = True  # avoid duplicate lines from uvicorn
+
+SKIP_PATHS = {"/favicon.ico", "/apple-touch-icon.png", "/apple-touch-icon-precomposed.png"}
 
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="Ithildin - Observability as Code")
@@ -22,12 +25,13 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 async def log_requests(request: Request, call_next):
     start = time.time()
     response = await call_next(request)
-    duration_ms = round((time.time() - start) * 1000)
-    logger.info(
-        "%s %s status=%d ip=%s duration=%dms",
-        request.method, request.url.path,
-        response.status_code, request.client.host, duration_ms
-    )
+    if request.url.path not in SKIP_PATHS:
+        duration_ms = round((time.time() - start) * 1000)
+        logger.info(
+            "%s %s status=%d ip=%s duration=%dms",
+            request.method, request.url.path,
+            response.status_code, request.client.host, duration_ms
+        )
     return response
 templates = Jinja2Templates(directory="templates")
 
