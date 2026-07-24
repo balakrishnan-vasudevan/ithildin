@@ -244,7 +244,7 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := r.ParseForm(); err != nil {
+	if err := r.ParseMultipartForm(1 << 20); err != nil {
 		http.Error(w, `{"error":"invalid form"}`, http.StatusBadRequest)
 		return
 	}
