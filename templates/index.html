@@ -80,6 +80,39 @@
             align-items: end;
         }
 
+        .source-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .custom-selectors {
+            display: none;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .custom-selectors.visible { display: grid; }
+
+        .hint {
+            font-size: 12px;
+            color: #8b949e;
+            font-family: -apple-system, sans-serif;
+            line-height: 1.5;
+            align-self: end;
+            padding-bottom: 10px;
+        }
+
+        .hint code { color: #79c0ff; }
+
+        @media (max-width: 760px) {
+            .container { padding: 24px 16px; }
+            .form-card { padding: 20px; }
+            .form-grid, .source-grid, .custom-selectors { grid-template-columns: 1fr; }
+        }
+
         .field label {
             display: block;
             font-size: 12px;
@@ -331,6 +364,30 @@
                     <button type="submit" id="submit-btn">Generate</button>
                 </div>
             </div>
+            <div class="source-grid">
+                <div class="field">
+                    <label>Metric Source</label>
+                    <select name="source" id="source">
+                        <option value="service-counter" selected>&lt;service&gt;_requests_total</option>
+                        <option value="prometheus-http">Prometheus HTTP (http_requests_total)</option>
+                        <option value="grpc">gRPC (grpc_server_handled_total)</option>
+                        <option value="istio">Istio (istio_requests_total)</option>
+                        <option value="ingress-nginx">ingress-nginx</option>
+                        <option value="custom">Custom selectors</option>
+                    </select>
+                </div>
+                <p class="hint" id="source-hint"></p>
+            </div>
+            <div class="custom-selectors" id="custom-selectors">
+                <div class="field">
+                    <label>Error Requests Selector</label>
+                    <input type="text" name="error_selector" placeholder='http_server_requests_seconds_count{app="payment-api",outcome="SERVER_ERROR"}' />
+                </div>
+                <div class="field">
+                    <label>Total Requests Selector</label>
+                    <input type="text" name="total_selector" placeholder='http_server_requests_seconds_count{app="payment-api"}' />
+                </div>
+            </div>
         </form>
     </div>
 
@@ -395,8 +452,8 @@
 
         try {
             const res = await fetch('/generate', { method: 'POST', body: data });
-            if (!res.ok) throw new Error('Generation failed');
-            const json = await res.json();
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(json.error || 'Something went wrong. Please try again.');
 
             document.getElementById('recording-code').textContent = json.recording_rules;
             document.getElementById('alerting-code').textContent = json.alerting_rules;
@@ -404,13 +461,33 @@
 
             results.classList.add('visible');
         } catch (err) {
-            errorMsg.textContent = 'Something went wrong. Please try again.';
+            errorMsg.textContent = err.message;
             errorMsg.classList.add('visible');
         } finally {
             loading.classList.remove('visible');
             submitBtn.disabled = false;
         }
     });
+
+    // Metric source
+    const sourceHints = {
+        'service-counter': 'Counts <code>&lt;service&gt;_requests_total</code>, errors where <code>status=~"5.."</code>.',
+        'prometheus-http': 'Counts <code>http_requests_total{job="&lt;service&gt;"}</code>, errors where <code>code=~"5.."</code>.',
+        'grpc': 'Counts <code>grpc_server_handled_total{job="&lt;service&gt;"}</code>, errors on server-side codes (Internal, Unavailable, DeadlineExceeded, …).',
+        'istio': 'Counts <code>istio_requests_total</code> at the destination, errors where <code>response_code=~"5.."</code>.',
+        'ingress-nginx': 'Counts <code>nginx_ingress_controller_requests{service="&lt;service&gt;"}</code>, errors where <code>status=~"5.."</code>.',
+        'custom': 'Enter two PromQL vector selectors. Ithildin wraps them as <code>sum(rate(errors[w])) / sum(rate(total[w]))</code>.',
+    };
+    const sourceSelect = document.getElementById('source');
+    const customSelectors = document.getElementById('custom-selectors');
+    function updateSource() {
+        const custom = sourceSelect.value === 'custom';
+        customSelectors.classList.toggle('visible', custom);
+        customSelectors.querySelectorAll('input').forEach(i => i.required = custom);
+        document.getElementById('source-hint').innerHTML = sourceHints[sourceSelect.value];
+    }
+    sourceSelect.addEventListener('change', updateSource);
+    updateSource();
 
     // Tabs
     document.querySelectorAll('.tab').forEach(tab => {
