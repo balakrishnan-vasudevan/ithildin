@@ -132,24 +132,31 @@ Most teams write their SLOs down in a doc and then wire up Prometheus rules and 
 
 ## Using with terraform-k8s-argus
 
-If you use the [Argus Terraform module](https://github.com/balakrishnan-vasudevan/terraform-k8s-argus) to manage your Kubernetes observability stack, you can feed Ithildin's output directly into Prometheus:
+If you use the [Argus Terraform module](https://github.com/balakrishnan-vasudevan/terraform-k8s-argus) to manage your Kubernetes observability stack, you can feed Ithildin's output directly into Prometheus. Argus loads `ithildin_rules` into kube-prometheus-stack via `additionalPrometheusRulesMap`.
+
+You need both the recording rules and the alerting rules. The alerts read the recorded series, so with only the recording rules nothing will ever page you, and with only the alerting rules the alerts have no data. Argus takes a single YAML document, so merge the two files' `groups` lists rather than pasting one after the other (two top-level `groups:` keys won't parse):
 
 ```hcl
 module "argus" {
-  source         = "github.com/balakrishnan-vasudevan/terraform-k8s-argus//aws"
-  ithildin_rules = file("${path.module}/slo-rules.yaml")
+  source = "github.com/balakrishnan-vasudevan/terraform-k8s-argus//aws"
+  ithildin_rules = yamlencode({
+    groups = concat(
+      yamldecode(file("${path.module}/slo/checkout-api-availability-recording.yaml")).groups,
+      yamldecode(file("${path.module}/slo/checkout-api-availability-alerting.yaml")).groups,
+    )
+  })
   # ...
 }
 ```
 
-Copy the recording rules from the UI into `slo-rules.yaml` and pass it as `ithildin_rules`. Argus loads it into kube-prometheus-stack via `additionalPrometheusRulesMap`.
+The file names are what the [CLI](#cli) writes (`ithildin generate ... -out slo/`). If you're copying from the UI instead, save each tab to its own file. For more SLOs, add their two files to the same `concat`.
 
 ## Tech stack
 
 - Go (`net/http`, `log/slog`)
 - `gopkg.in/yaml.v3` for rule generation
 - `golang.org/x/time/rate` for per-IP rate limiting
-- Deployed on Render's free tier (~10ms cold start)
+- Deployed on Render's free tier, so it may take ~30s to wake up if nobody has used it for a while
 
 ## Running locally
 

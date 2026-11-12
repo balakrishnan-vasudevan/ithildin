@@ -276,6 +276,11 @@
             color: #58a6ff;
         }
 
+        .code-actions {
+            display: flex;
+            gap: 8px;
+        }
+
         .copy-btn.copied {
             border-color: #238636;
             color: #2ea043;
@@ -458,24 +463,33 @@
 
         <div class="tab-content active" id="tab-recording">
             <div class="code-header">
-                <span class="code-label">prometheus-recording-rules.yaml</span>
-                <button class="copy-btn" data-target="recording-code">Copy</button>
+                <span class="code-label" id="recording-label">prometheus-recording-rules.yaml</span>
+                <span class="code-actions">
+                    <button class="copy-btn" data-target="recording-code">Copy</button>
+                    <button class="copy-btn download-btn" data-target="recording-code" data-label="recording-label">Download</button>
+                </span>
             </div>
             <pre id="recording-code"></pre>
         </div>
 
         <div class="tab-content" id="tab-alerting">
             <div class="code-header">
-                <span class="code-label">prometheus-alerting-rules.yaml</span>
-                <button class="copy-btn" data-target="alerting-code">Copy</button>
+                <span class="code-label" id="alerting-label">prometheus-alerting-rules.yaml</span>
+                <span class="code-actions">
+                    <button class="copy-btn" data-target="alerting-code">Copy</button>
+                    <button class="copy-btn download-btn" data-target="alerting-code" data-label="alerting-label">Download</button>
+                </span>
             </div>
             <pre id="alerting-code"></pre>
         </div>
 
         <div class="tab-content" id="tab-grafana">
             <div class="code-header">
-                <span class="code-label">grafana-dashboard.json</span>
-                <button class="copy-btn" data-target="grafana-code">Copy</button>
+                <span class="code-label" id="grafana-label">grafana-dashboard.json</span>
+                <span class="code-actions">
+                    <button class="copy-btn" data-target="grafana-code">Copy</button>
+                    <button class="copy-btn download-btn" data-target="grafana-code" data-label="grafana-label">Download</button>
+                </span>
             </div>
             <pre id="grafana-code"></pre>
         </div>
@@ -492,6 +506,10 @@
     const loading = document.getElementById('loading');
     const errorMsg = document.getElementById('error-msg');
     const submitBtn = document.getElementById('submit-btn');
+
+    // Set while the example that runs on first load is generating, so the
+    // bare URL stays clean.
+    let autoExample = false;
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -511,12 +529,19 @@
             document.getElementById('alerting-code').textContent = json.alerting_rules;
             document.getElementById('grafana-code').textContent = json.grafana_dashboard;
 
+            const base = (form.elements.service.value || 'service') + '-' +
+                         (form.elements.name.value || typeSelect.value);
+            document.getElementById('recording-label').textContent = base + '-recording.yaml';
+            document.getElementById('alerting-label').textContent = base + '-alerting.yaml';
+            document.getElementById('grafana-label').textContent = base + '-dashboard.json';
+
             results.classList.add('visible');
-            saveToURL();
+            if (!autoExample) saveToURL();
         } catch (err) {
             errorMsg.textContent = err.message;
             errorMsg.classList.add('visible');
         } finally {
+            autoExample = false;
             loading.classList.remove('visible');
             submitBtn.disabled = false;
         }
@@ -586,7 +611,15 @@
 
     function loadFromURL() {
         const params = new URLSearchParams(location.search);
-        if (!params.get('service')) return;
+        if (!params.get('service')) {
+            // No shared link: show a worked example straight away so the
+            // output panes aren't empty on first visit.
+            sourceSelect.value = 'prometheus-http';
+            updateForm();
+            autoExample = true;
+            document.getElementById('example-btn').click();
+            return;
+        }
         for (const f of linkFields) {
             if (params.has(f)) form.elements[f].value = params.get(f);
         }
@@ -650,7 +683,7 @@
     });
 
     // Copy buttons
-    document.querySelectorAll('.copy-btn').forEach(btn => {
+    document.querySelectorAll('.copy-btn:not(.download-btn)').forEach(btn => {
         btn.addEventListener('click', () => {
             const target = document.getElementById(btn.dataset.target);
             navigator.clipboard.writeText(target.textContent).then(() => {
@@ -661,6 +694,20 @@
                     btn.classList.remove('copied');
                 }, 2000);
             });
+        });
+    });
+
+    // Download buttons save the pane under the name shown in its header.
+    document.querySelectorAll('.download-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const text = document.getElementById(btn.dataset.target).textContent;
+            const name = document.getElementById(btn.dataset.label).textContent;
+            const type = name.endsWith('.json') ? 'application/json' : 'application/yaml';
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([text], { type }));
+            a.download = name;
+            a.click();
+            URL.revokeObjectURL(a.href);
         });
     });
 
