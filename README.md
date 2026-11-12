@@ -8,7 +8,14 @@ Live at: https://ithildin.onrender.com
 
 ## What it does
 
-Input a service name and SLO target. Get:
+The form has four fields:
+
+- **Service Name**, e.g. `checkout-api`
+- **SLO Target**, as a percentage between 90 and 99.999
+- **Error Budget Window**: 7, 30 or 90 days
+- **Metric Source**: which metrics your service already exports (see [Metric sources](#metric-sources) below)
+
+Hit Generate and you get:
 
 - Prometheus recording rules: error rates over 5m, 30m, 1h, 6h, 1d and 3d, plus one over the full error budget window (7d, 30d or 90d)
 - Multi-burn-rate alerting rules, following the Google SRE workbook (critical fast/slow, warning fast/slow)
@@ -18,18 +25,20 @@ If you just want to see what comes out, hit "Try an example" in the UI. It fills
 
 ## Metric sources
 
-You don't need to change your instrumentation. Pick the convention your service already uses:
+You don't need to change your instrumentation. Use the Metric Source dropdown to tell Ithildin which metrics your service already exports, and the rules are written against those. If you're not sure, look at what your `/metrics` endpoint exposes and find the matching row.
 
-| Source | Total requests | Errors |
-|---|---|---|
-| `service-counter` (default) | `<service>_requests_total` | `status=~"5.."` |
-| `prometheus-http` | `http_requests_total{job="<service>"}` | `code=~"5.."` |
-| `grpc` | `grpc_server_handled_total{job="<service>"}` | server-side codes (Internal, Unavailable, DeadlineExceeded, etc.) |
-| `istio` | `istio_requests_total{reporter="destination",destination_service_name="<service>"}` | `response_code=~"5.."` |
-| `ingress-nginx` | `nginx_ingress_controller_requests{service="<service>"}` | `status=~"5.."` |
-| `custom` | any vector selector | any vector selector |
+| Metric Source option | API value | Total requests | Errors |
+|---|---|---|---|
+| `<service>_requests_total` (default) | `service-counter` | `<service>_requests_total` | `status=~"5.."` |
+| Prometheus HTTP | `prometheus-http` | `http_requests_total{job="<service>"}` | `code=~"5.."` |
+| gRPC | `grpc` | `grpc_server_handled_total{job="<service>"}` | server-side codes (Internal, Unavailable, DeadlineExceeded, etc.) |
+| Istio | `istio` | `istio_requests_total{reporter="destination",destination_service_name="<service>"}` | `response_code=~"5.."` |
+| ingress-nginx | `ingress-nginx` | `nginx_ingress_controller_requests{service="<service>"}` | `status=~"5.."` |
+| Custom selectors | `custom` | whatever you enter | whatever you enter |
 
-For `custom`, enter two PromQL vector selectors (a metric name and label matchers, no ranges or functions). Each recording rule is then `sum(rate(errors[w])) / sum(rate(total[w]))`.
+`<service>` is whatever you typed in Service Name. For the Prometheus HTTP and gRPC options, that has to match the `job` label Prometheus scrapes your service under.
+
+If none of these fit, choose Custom selectors. Two more fields appear, one for error requests and one for total requests. Each takes a PromQL vector selector (a metric name and label matchers, no ranges or functions), for example `http_server_requests_seconds_count{app="checkout",outcome="SERVER_ERROR"}`. Each recording rule is then `sum(rate(errors[w])) / sum(rate(total[w]))`.
 
 Hyphens and dots in the service name are replaced with `_` in metric names, so `payment-api` becomes `payment_api_requests_total`.
 
