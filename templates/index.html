@@ -147,6 +147,28 @@
             background: #161b22;
         }
 
+        .actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        #example-btn {
+            background: transparent;
+            border: 1px solid #30363d;
+            color: #e6edf3;
+            padding: 10px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            white-space: nowrap;
+            font-family: -apple-system, sans-serif;
+            transition: border-color 0.2s;
+        }
+
+        #example-btn:hover {
+            border-color: #58a6ff;
+        }
+
         button[type="submit"] {
             background: #238636;
             border: 1px solid #2ea043;
@@ -360,8 +382,9 @@
                         <option value="90d">90 days</option>
                     </select>
                 </div>
-                <div class="field">
+                <div class="field actions">
                     <button type="submit" id="submit-btn">Generate</button>
+                    <button type="button" id="example-btn">Try an example</button>
                 </div>
             </div>
             <div class="source-grid">
@@ -473,7 +496,7 @@
     const sourceHints = {
         'service-counter': 'Counts <code>&lt;service&gt;_requests_total</code>, errors where <code>status=~"5.."</code>.',
         'prometheus-http': 'Counts <code>http_requests_total{job="&lt;service&gt;"}</code>, errors where <code>code=~"5.."</code>.',
-        'grpc': 'Counts <code>grpc_server_handled_total{job="&lt;service&gt;"}</code>, errors on server-side codes (Internal, Unavailable, DeadlineExceeded, …).',
+        'grpc': 'Counts <code>grpc_server_handled_total{job="&lt;service&gt;"}</code>, errors on server-side codes (Internal, Unavailable, DeadlineExceeded, etc.).',
         'istio': 'Counts <code>istio_requests_total</code> at the destination, errors where <code>response_code=~"5.."</code>.',
         'ingress-nginx': 'Counts <code>nginx_ingress_controller_requests{service="&lt;service&gt;"}</code>, errors where <code>status=~"5.."</code>.',
         'custom': 'Enter two PromQL vector selectors. Ithildin wraps them as <code>sum(rate(errors[w])) / sum(rate(total[w]))</code>.',
@@ -488,6 +511,16 @@
     }
     sourceSelect.addEventListener('change', updateSource);
     updateSource();
+
+    // Example: fill the form with a realistic service and generate.
+    document.getElementById('example-btn').addEventListener('click', () => {
+        form.elements.service.value = 'checkout-api';
+        form.elements.slo.value = '99.9';
+        form.elements.window.value = '30d';
+        sourceSelect.value = 'prometheus-http';
+        updateSource();
+        form.requestSubmit();
+    });
 
     // Tabs
     document.querySelectorAll('.tab').forEach(tab => {

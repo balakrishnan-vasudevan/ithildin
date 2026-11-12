@@ -6,6 +6,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -206,5 +207,73 @@ func TestHandleGenerateReturnsJSONError(t *testing.T) {
 	var out map[string]string
 	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil || out["error"] == "" {
 		t.Errorf("body is not a JSON error: %s", rec.Body)
+	}
+}
+
+var grafanaUIDRe = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,40}$`)
+
+func TestDashboardUID(t *testing.T) {
+	if got := dashboardUID("payment-api"); got != "slo-payment_api" {
+		t.Errorf("dashboardUID = %q", got)
+	}
+	long1 := strings.Repeat("a", 50) + "-one"
+	long2 := strings.Repeat("a", 50) + "-two"
+	u1, u2 := dashboardUID(long1), dashboardUID(long2)
+	for _, u := range []string{u1, u2, dashboardUID("svc.v2")} {
+		if !grafanaUIDRe.MatchString(u) {
+			t.Errorf("invalid Grafana UID %q", u)
+		}
+	}
+	if u1 == u2 {
+		t.Errorf("long names collide: %q", u1)
+	}
+	if dashboardUID(long1) != u1 {
+		t.Errorf("UID is not stable")
+	}
+}
+
+func TestDashboardIsGrafanaModel(t *testing.T) {
+	out, err := generateGrafanaDashboard(mustSpec(t, "payment-api", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var d struct {
+		UID           string `json:"uid"`
+		SchemaVersion int    `json:"schemaVersion"`
+		Templating    struct {
+			List []struct{ Name, Type, Query string } `json:"list"`
+		} `json:"templating"`
+		Panels []struct {
+			ID         int               `json:"id"`
+			Datasource map[string]string `json:"datasource"`
+			Targets    []struct {
+				RefID      string            `json:"refId"`
+				Datasource map[string]string `json:"datasource"`
+			} `json:"targets"`
+		} `json:"panels"`
+	}
+	if err := json.Unmarshal([]byte(out), &d); err != nil {
+		t.Fatal(err)
+	}
+	if d.UID == "" || d.SchemaVersion != grafanaSchemaVersion {
+		t.Errorf("uid=%q schemaVersion=%d", d.UID, d.SchemaVersion)
+	}
+	if len(d.Templating.List) != 1 || d.Templating.List[0].Type != "datasource" || d.Templating.List[0].Query != "prometheus" {
+		t.Errorf("missing prometheus datasource variable: %+v", d.Templating.List)
+	}
+	ids := map[int]bool{}
+	for _, p := range d.Panels {
+		if p.ID == 0 || ids[p.ID] {
+			t.Errorf("panel id %d missing or duplicated", p.ID)
+		}
+		ids[p.ID] = true
+		if p.Datasource["uid"] != "${datasource}" {
+			t.Errorf("panel %d datasource = %v", p.ID, p.Datasource)
+		}
+		for _, tg := range p.Targets {
+			if tg.RefID == "" || tg.Datasource["uid"] != "${datasource}" {
+				t.Errorf("panel %d target missing refId or datasource", p.ID)
+			}
+		}
 	}
 }

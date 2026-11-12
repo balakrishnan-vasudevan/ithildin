@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"log/slog"
 	"net"
 	"net/http"
@@ -318,43 +319,102 @@ func generateAlertingRules(s Spec) (string, error) {
 	return string(b), err
 }
 
+// Dashboard schema version 39 is what Grafana 10.4 writes natively, so it
+// imports there with no migration. Newer versions upgrade it on load.
+const grafanaSchemaVersion = 39
+
+// dashboardUID derives a stable UID from the service name, so re-importing
+// a regenerated dashboard updates the existing one instead of duplicating it.
+// Grafana UIDs are limited to 40 characters.
+func dashboardUID(service string) string {
+	uid := "slo-" + metricPrefix(service)
+	if len(uid) <= 40 {
+		return uid
+	}
+	h := fnv.New32a()
+	h.Write([]byte(service))
+	return fmt.Sprintf("%s-%08x", uid[:31], h.Sum32())
+}
+
+// Panels reference the datasource through a dashboard variable, so the
+// same JSON works via the import UI, the HTTP API and file provisioning.
+var promDatasource = map[string]string{"type": "prometheus", "uid": "${datasource}"}
+
+func promTarget(expr, legend string) []map[string]any {
+	return []map[string]any{{
+		"refId":        "A",
+		"datasource":   promDatasource,
+		"expr":         expr,
+		"legendFormat": legend,
+	}}
+}
+
 func generateGrafanaDashboard(s Spec) (string, error) {
 	dashboard := map[string]any{
-		"title": fmt.Sprintf("%s SLO Dashboard", s.Service),
-		"tags":  []string{"slo", "observability", "ithildin"},
+		"uid":           dashboardUID(s.Service),
+		"title":         fmt.Sprintf("%s SLO Dashboard", s.Service),
+		"tags":          []string{"slo", "observability", "ithildin"},
+		"schemaVersion": grafanaSchemaVersion,
+		"version":       1,
+		"editable":      true,
+		"timezone":      "browser",
+		"refresh":       "1m",
+		"time":          map[string]string{"from": "now-24h", "to": "now"},
+		"templating": map[string]any{
+			"list": []map[string]any{{
+				"name":       "datasource",
+				"label":      "Data source",
+				"type":       "datasource",
+				"query":      "prometheus",
+				"current":    map[string]any{},
+				"options":    []any{},
+				"refresh":    1,
+				"hide":       0,
+				"includeAll": false,
+				"multi":      false,
+			}},
+		},
+		"annotations": map[string]any{"list": []any{}},
 		"panels": []map[string]any{
 			{
-				"title":   "Error Rate",
-				"type":    "timeseries",
-				"gridPos": map[string]int{"h": 8, "w": 12, "x": 0, "y": 0},
-				"targets": []map[string]string{{
-					"expr":         fmt.Sprintf(`%s{service=%q}`, recordName("5m"), s.Service),
-					"legendFormat": "5m error rate",
-				}},
+				"id":         1,
+				"title":      "Error Rate",
+				"type":       "timeseries",
+				"datasource": promDatasource,
+				"gridPos":    map[string]int{"h": 8, "w": 12, "x": 0, "y": 0},
+				"targets": promTarget(
+					fmt.Sprintf(`%s{service=%q}`, recordName("5m"), s.Service),
+					"5m error rate",
+				),
 				"fieldConfig": map[string]any{
-					"defaults": map[string]any{"unit": "percentunit"},
+					"defaults":  map[string]any{"unit": "percentunit"},
+					"overrides": []any{},
 				},
 			},
 			{
-				"title":   fmt.Sprintf("Availability over %s (SLO %.3f%%)", s.Window, s.SLO),
-				"type":    "gauge",
-				"gridPos": map[string]int{"h": 8, "w": 12, "x": 12, "y": 0},
-				"targets": []map[string]string{{
-					"expr":         fmt.Sprintf(`1 - %s{service=%q}`, recordName(s.Window), s.Service),
-					"legendFormat": "availability",
-				}},
+				"id":         2,
+				"title":      fmt.Sprintf("Availability over %s (SLO %.3f%%)", s.Window, s.SLO),
+				"type":       "gauge",
+				"datasource": promDatasource,
+				"gridPos":    map[string]int{"h": 8, "w": 12, "x": 12, "y": 0},
+				"targets": promTarget(
+					fmt.Sprintf(`1 - %s{service=%q}`, recordName(s.Window), s.Service),
+					"availability",
+				),
 				"fieldConfig": map[string]any{
 					"defaults": map[string]any{
 						"unit":     "percentunit",
 						"decimals": 3,
 						"thresholds": map[string]any{
+							"mode": "absolute",
 							"steps": []map[string]any{
-								{"color": "red", "value": 0},
+								{"color": "red", "value": nil},
 								{"color": "yellow", "value": s.SLO/100 - 0.001},
 								{"color": "green", "value": s.SLO / 100},
 							},
 						},
 					},
+					"overrides": []any{},
 				},
 			},
 		},
