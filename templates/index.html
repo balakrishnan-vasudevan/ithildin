@@ -512,12 +512,28 @@
     sourceSelect.addEventListener('change', updateSource);
     updateSource();
 
-    // Example: fill the form with a realistic service and generate.
+    // Example: fill the form with a sample service for the selected metric
+    // source and generate.
+    const examples = {
+        'service-counter': { service: 'payment-api', slo: '99.9' },
+        'prometheus-http': { service: 'checkout-api', slo: '99.9' },
+        'grpc':            { service: 'inventory-service', slo: '99.95' },
+        'istio':           { service: 'reviews', slo: '99.5' },
+        'ingress-nginx':   { service: 'storefront', slo: '99.9' },
+        'custom': {
+            service: 'billing',
+            slo: '99.9',
+            error_selector: 'http_server_requests_seconds_count{app="billing",outcome="SERVER_ERROR"}',
+            total_selector: 'http_server_requests_seconds_count{app="billing"}',
+        },
+    };
     document.getElementById('example-btn').addEventListener('click', () => {
-        form.elements.service.value = 'checkout-api';
-        form.elements.slo.value = '99.9';
+        const ex = examples[sourceSelect.value];
+        form.elements.service.value = ex.service;
+        form.elements.slo.value = ex.slo;
         form.elements.window.value = '30d';
-        sourceSelect.value = 'prometheus-http';
+        form.elements.error_selector.value = ex.error_selector || '';
+        form.elements.total_selector.value = ex.total_selector || '';
         updateSource();
         form.requestSubmit();
     });

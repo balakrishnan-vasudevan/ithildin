@@ -21,7 +21,7 @@ Hit Generate and you get:
 - Multi-burn-rate alerting rules, following the Google SRE workbook (critical fast/slow, warning fast/slow)
 - Grafana dashboard JSON you can import directly, with an error rate timeseries and an availability gauge for the budget window
 
-If you just want to see what comes out, hit "Try an example" in the UI. It fills in a sample service and generates everything.
+If you just want to see what comes out, pick a Metric Source and hit "Try an example". It fills in a sample service for that source (including the two selector fields for Custom selectors) and generates everything. Switch the source and click it again to compare.
 
 ## Metric sources
 
