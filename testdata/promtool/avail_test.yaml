@@ -1,0 +1,32 @@
+rule_files: [checkout-api-availability-recording.yaml, checkout-api-availability-alerting.yaml]
+evaluation_interval: 30s
+tests:
+  - interval: 30s
+    input_series:
+      - series: 'http_requests_total{job="checkout-api",code="200"}'
+        values: '0+990x2880'
+      - series: 'http_requests_total{job="checkout-api",code="500"}'
+        values: '0+10x2880'
+    promql_expr_test:
+      - expr: slo:sli_error:ratio_rate5m
+        eval_time: 2h
+        exp_samples:
+          - labels: 'slo:sli_error:ratio_rate5m{service="checkout-api",slo="availability"}'
+            value: 0.01
+      - expr: slo:sli_error:ratio_rate7d
+        eval_time: 2h
+        exp_samples:
+          - labels: 'slo:sli_error:ratio_rate7d{service="checkout-api",slo="availability"}'
+            value: 0.01
+    alert_rule_test:
+      - eval_time: 2h
+        alertname: CheckoutApiAvailabilityErrorBudgetCriticalSlow
+        exp_alerts:
+          - exp_labels: {service: checkout-api, slo: availability, severity: critical}
+            exp_annotations:
+              summary: checkout-api availability SLO is burning error budget too fast (CriticalSlow)
+              description: "checkout-api availability SLO (99.9% of requests succeed over 7d) is using its error budget at 6.0x the sustainable rate. Bad ratio over 30m: 1%."
+
+      - eval_time: 2h
+        alertname: CheckoutApiAvailabilityErrorBudgetCriticalFast
+        exp_alerts: []

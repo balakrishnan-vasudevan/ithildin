@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ithildin — Observability as Code</title>
+    <title>Ithildin: SLO rule generator</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -75,17 +75,19 @@
 
         .form-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr auto;
+            grid-template-columns: repeat(4, 1fr);
             gap: 16px;
             align-items: end;
         }
 
-        .source-grid {
-            display: grid;
-            grid-template-columns: 1fr 2fr;
-            gap: 16px;
+        .second-row {
+            grid-template-columns: 2fr 1fr 1fr;
             margin-top: 16px;
         }
+
+        .custom-selectors.single.visible { grid-template-columns: 1fr; }
+
+        .form-actions { margin-top: 20px; }
 
         .custom-selectors {
             display: none;
@@ -101,8 +103,7 @@
             color: #8b949e;
             font-family: -apple-system, sans-serif;
             line-height: 1.5;
-            align-self: end;
-            padding-bottom: 10px;
+            margin-top: 12px;
         }
 
         .hint code { color: #79c0ff; }
@@ -110,7 +111,8 @@
         @media (max-width: 760px) {
             .container { padding: 24px 16px; }
             .form-card { padding: 20px; }
-            .form-grid, .source-grid, .custom-selectors { grid-template-columns: 1fr; }
+            .form-grid, .second-row, .custom-selectors.visible { grid-template-columns: 1fr; }
+            .form-actions { flex-wrap: wrap; }
         }
 
         .field label {
@@ -152,7 +154,7 @@
             gap: 8px;
         }
 
-        #example-btn {
+        .secondary-btn {
             background: transparent;
             border: 1px solid #30363d;
             color: #e6edf3;
@@ -165,8 +167,13 @@
             transition: border-color 0.2s;
         }
 
-        #example-btn:hover {
+        .secondary-btn:hover:not(:disabled) {
             border-color: #58a6ff;
+        }
+
+        .secondary-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
         }
 
         button[type="submit"] {
@@ -353,14 +360,14 @@
     <div class="rune">ᚱ</div>
     <div>
         <h1>Ithildin <span class="pill">v0.1</span></h1>
-        <p>Observability as Code — SLO rule generator</p>
+        <p>SLO rule generator for Prometheus and Grafana</p>
     </div>
 </header>
 
 <div class="container">
     <div class="tagline">
-        <h2>Generate production-grade SLO rules instantly</h2>
-        <p>Input your service definition. Get Prometheus recording rules, multi-burn-rate alerts, and a Grafana dashboard.</p>
+        <h2>SLO rules for Prometheus</h2>
+        <p>Pick your service, target and metrics. You get recording rules, burn-rate alerts and a Grafana dashboard to copy into your setup.</p>
     </div>
 
     <div class="form-card">
@@ -369,6 +376,13 @@
                 <div class="field">
                     <label>Service Name</label>
                     <input type="text" name="service" placeholder="payment-api" required />
+                </div>
+                <div class="field">
+                    <label>SLO Type</label>
+                    <select name="type" id="type">
+                        <option value="availability" selected>Availability</option>
+                        <option value="latency">Latency</option>
+                    </select>
                 </div>
                 <div class="field">
                     <label>SLO Target (%)</label>
@@ -382,12 +396,8 @@
                         <option value="90d">90 days</option>
                     </select>
                 </div>
-                <div class="field actions">
-                    <button type="submit" id="submit-btn">Generate</button>
-                    <button type="button" id="example-btn">Try an example</button>
-                </div>
             </div>
-            <div class="source-grid">
+            <div class="form-grid second-row">
                 <div class="field">
                     <label>Metric Source</label>
                     <select name="source" id="source">
@@ -399,9 +409,17 @@
                         <option value="custom">Custom selectors</option>
                     </select>
                 </div>
-                <p class="hint" id="source-hint"></p>
+                <div class="field latency-only">
+                    <label>Latency Threshold (ms)</label>
+                    <input type="number" name="threshold_ms" placeholder="300" min="1" max="60000" step="any" />
+                </div>
+                <div class="field">
+                    <label>SLO Name (optional)</label>
+                    <input type="text" name="name" id="slo-name" placeholder="availability" />
+                </div>
             </div>
-            <div class="custom-selectors" id="custom-selectors">
+            <p class="hint" id="source-hint"></p>
+            <div class="custom-selectors" id="custom-availability">
                 <div class="field">
                     <label>Error Requests Selector</label>
                     <input type="text" name="error_selector" placeholder='http_server_requests_seconds_count{app="payment-api",outcome="SERVER_ERROR"}' />
@@ -410,6 +428,17 @@
                     <label>Total Requests Selector</label>
                     <input type="text" name="total_selector" placeholder='http_server_requests_seconds_count{app="payment-api"}' />
                 </div>
+            </div>
+            <div class="custom-selectors single" id="custom-latency">
+                <div class="field">
+                    <label>Histogram Bucket Selector</label>
+                    <input type="text" name="bucket_selector" placeholder='http_server_requests_seconds_bucket{app="payment-api"}' />
+                </div>
+            </div>
+            <div class="actions form-actions">
+                <button type="submit" id="submit-btn">Generate</button>
+                <button type="button" class="secondary-btn" id="example-btn">Try an example</button>
+                <button type="button" class="secondary-btn" id="link-btn" disabled>Copy link</button>
             </div>
         </form>
     </div>
@@ -454,7 +483,7 @@
 </div>
 
 <footer>
-    Built with <a href="https://github.com/balakrishnan-vasudevan/ithildin" target="_blank">Ithildin</a> — the moon-letters reveal what is hidden
+    Built with <a href="https://github.com/balakrishnan-vasudevan/ithildin" target="_blank">Ithildin</a>. The moon-letters reveal what is hidden.
 </footer>
 
 <script>
@@ -483,6 +512,7 @@
             document.getElementById('grafana-code').textContent = json.grafana_dashboard;
 
             results.classList.add('visible');
+            saveToURL();
         } catch (err) {
             errorMsg.textContent = err.message;
             errorMsg.classList.add('visible');
@@ -492,49 +522,120 @@
         }
     });
 
-    // Metric source
-    const sourceHints = {
-        'service-counter': 'Counts <code>&lt;service&gt;_requests_total</code>, errors where <code>status=~"5.."</code>.',
-        'prometheus-http': 'Counts <code>http_requests_total{job="&lt;service&gt;"}</code>, errors where <code>code=~"5.."</code>.',
-        'grpc': 'Counts <code>grpc_server_handled_total{job="&lt;service&gt;"}</code>, errors on server-side codes (Internal, Unavailable, DeadlineExceeded, etc.).',
-        'istio': 'Counts <code>istio_requests_total</code> at the destination, errors where <code>response_code=~"5.."</code>.',
-        'ingress-nginx': 'Counts <code>nginx_ingress_controller_requests{service="&lt;service&gt;"}</code>, errors where <code>status=~"5.."</code>.',
-        'custom': 'Enter two PromQL vector selectors. Ithildin wraps them as <code>sum(rate(errors[w])) / sum(rate(total[w]))</code>.',
-    };
+    // Form state: which fields show depends on the SLO type and source.
+    const typeSelect = document.getElementById('type');
     const sourceSelect = document.getElementById('source');
-    const customSelectors = document.getElementById('custom-selectors');
-    function updateSource() {
-        const custom = sourceSelect.value === 'custom';
-        customSelectors.classList.toggle('visible', custom);
-        customSelectors.querySelectorAll('input').forEach(i => i.required = custom);
-        document.getElementById('source-hint').innerHTML = sourceHints[sourceSelect.value];
-    }
-    sourceSelect.addEventListener('change', updateSource);
-    updateSource();
+    const sourceHints = {
+        availability: {
+            'service-counter': 'Counts <code>&lt;service&gt;_requests_total</code>, errors where <code>status=~"5.."</code>.',
+            'prometheus-http': 'Counts <code>http_requests_total{job="&lt;service&gt;"}</code>, errors where <code>code=~"5.."</code>.',
+            'grpc': 'Counts <code>grpc_server_handled_total{job="&lt;service&gt;"}</code>, errors on server-side codes (Internal, Unavailable, DeadlineExceeded, etc.).',
+            'istio': 'Counts <code>istio_requests_total</code> at the destination, errors where <code>response_code=~"5.."</code>.',
+            'ingress-nginx': 'Counts <code>nginx_ingress_controller_requests{service="&lt;service&gt;"}</code>, errors where <code>status=~"5.."</code>.',
+            'custom': 'Enter two PromQL vector selectors. Ithildin wraps them as <code>sum(rate(errors[w])) / sum(rate(total[w]))</code>.',
+        },
+        latency: {
+            'service-counter': 'Uses the <code>&lt;service&gt;_request_duration_seconds</code> histogram.',
+            'prometheus-http': 'Uses the <code>http_request_duration_seconds</code> histogram for <code>job="&lt;service&gt;"</code>.',
+            'grpc': 'Uses <code>grpc_server_handling_seconds</code>. Handling-time histograms have to be turned on in your gRPC server.',
+            'istio': 'Uses <code>istio_request_duration_milliseconds</code> at the destination.',
+            'ingress-nginx': 'Uses <code>nginx_ingress_controller_request_duration_seconds</code> for the backend service.',
+            'custom': 'Enter a histogram <code>_bucket</code> selector without <code>le</code>. Ithildin adds the bucket for your threshold and uses the matching <code>_count</code>.',
+        },
+    };
+    const footnote = ' The threshold has to be one of your histogram\'s bucket boundaries.';
 
-    // Example: fill the form with a sample service for the selected metric
-    // source and generate.
+    function updateForm() {
+        const type = typeSelect.value;
+        const custom = sourceSelect.value === 'custom';
+        const latency = type === 'latency';
+        document.querySelectorAll('.latency-only').forEach(el => el.style.display = latency ? '' : 'none');
+        form.elements.threshold_ms.required = latency;
+        const panels = { availability: 'custom-availability', latency: 'custom-latency' };
+        for (const [t, id] of Object.entries(panels)) {
+            const el = document.getElementById(id);
+            const show = custom && t === type;
+            el.classList.toggle('visible', show);
+            el.querySelectorAll('input').forEach(i => i.required = show);
+        }
+        document.getElementById('slo-name').placeholder = type;
+        document.getElementById('source-hint').innerHTML =
+            sourceHints[type][sourceSelect.value] + (latency && !custom ? footnote : '');
+    }
+    typeSelect.addEventListener('change', updateForm);
+    sourceSelect.addEventListener('change', updateForm);
+    updateForm();
+
+    // Shareable links: the form state lives in the query string, so a link
+    // to the page reproduces the same output.
+    const linkFields = ['service', 'type', 'slo', 'window', 'source', 'threshold_ms', 'name',
+                        'error_selector', 'total_selector', 'bucket_selector'];
+    const linkBtn = document.getElementById('link-btn');
+
+    function saveToURL() {
+        const params = new URLSearchParams();
+        for (const f of linkFields) {
+            const el = form.elements[f];
+            const hidden = el.closest('.custom-selectors:not(.visible)') ||
+                           (el.closest('.latency-only') && typeSelect.value !== 'latency');
+            if (el.value && !hidden) params.set(f, el.value);
+        }
+        history.replaceState(null, '', '?' + params.toString());
+        linkBtn.disabled = false;
+    }
+
+    function loadFromURL() {
+        const params = new URLSearchParams(location.search);
+        if (!params.get('service')) return;
+        for (const f of linkFields) {
+            if (params.has(f)) form.elements[f].value = params.get(f);
+        }
+        updateForm();
+        form.requestSubmit();
+    }
+
+    linkBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(location.href).then(() => {
+            linkBtn.textContent = 'Copied!';
+            setTimeout(() => linkBtn.textContent = 'Copy link', 2000);
+        });
+    });
+
+    // Example: fill the form with a sample service for the selected SLO type
+    // and metric source, then generate.
     const examples = {
-        'service-counter': { service: 'payment-api', slo: '99.9' },
-        'prometheus-http': { service: 'checkout-api', slo: '99.9' },
-        'grpc':            { service: 'inventory-service', slo: '99.95' },
-        'istio':           { service: 'reviews', slo: '99.5' },
-        'ingress-nginx':   { service: 'storefront', slo: '99.9' },
-        'custom': {
-            service: 'billing',
-            slo: '99.9',
-            error_selector: 'http_server_requests_seconds_count{app="billing",outcome="SERVER_ERROR"}',
-            total_selector: 'http_server_requests_seconds_count{app="billing"}',
+        availability: {
+            'service-counter': { service: 'payment-api', slo: '99.9' },
+            'prometheus-http': { service: 'checkout-api', slo: '99.9' },
+            'grpc':            { service: 'inventory-service', slo: '99.95' },
+            'istio':           { service: 'reviews', slo: '99.5' },
+            'ingress-nginx':   { service: 'storefront', slo: '99.9' },
+            'custom': {
+                service: 'billing', slo: '99.9',
+                error_selector: 'http_server_requests_seconds_count{app="billing",outcome="SERVER_ERROR"}',
+                total_selector: 'http_server_requests_seconds_count{app="billing"}',
+            },
+        },
+        latency: {
+            'service-counter': { service: 'payment-api', slo: '99', threshold_ms: '250' },
+            'prometheus-http': { service: 'checkout-api', slo: '99', threshold_ms: '300' },
+            'grpc':            { service: 'inventory-service', slo: '99.5', threshold_ms: '100' },
+            'istio':           { service: 'reviews', slo: '99', threshold_ms: '250' },
+            'ingress-nginx':   { service: 'storefront', slo: '95', threshold_ms: '500' },
+            'custom': {
+                service: 'billing', slo: '99', threshold_ms: '500',
+                bucket_selector: 'http_server_requests_seconds_bucket{app="billing"}',
+            },
         },
     };
     document.getElementById('example-btn').addEventListener('click', () => {
-        const ex = examples[sourceSelect.value];
-        form.elements.service.value = ex.service;
-        form.elements.slo.value = ex.slo;
+        const ex = examples[typeSelect.value][sourceSelect.value];
+        for (const f of ['service', 'slo', 'threshold_ms', 'error_selector', 'total_selector', 'bucket_selector']) {
+            form.elements[f].value = ex[f] || '';
+        }
+        form.elements.name.value = '';
         form.elements.window.value = '30d';
-        form.elements.error_selector.value = ex.error_selector || '';
-        form.elements.total_selector.value = ex.total_selector || '';
-        updateSource();
+        updateForm();
         form.requestSubmit();
     });
 
@@ -562,6 +663,8 @@
             });
         });
     });
+
+    loadFromURL();
 </script>
 
 </body>

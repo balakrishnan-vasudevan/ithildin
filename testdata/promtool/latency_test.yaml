@@ -1,0 +1,34 @@
+rule_files: [checkout-api-latency-recording.yaml, checkout-api-latency-alerting.yaml]
+evaluation_interval: 30s
+tests:
+  - interval: 30s
+    input_series:
+      # Prometheus 3 writes whole-number buckets as "1.0"
+      - series: 'http_request_duration_seconds_bucket{job="checkout-api",le="1.0"}'
+        values: '0+980x2880'
+      - series: 'http_request_duration_seconds_bucket{job="checkout-api",le="+Inf"}'
+        values: '0+1000x2880'
+      - series: 'http_request_duration_seconds_count{job="checkout-api"}'
+        values: '0+1000x2880'
+    promql_expr_test:
+      - expr: slo:sli_error:ratio_rate1h
+        eval_time: 5h
+        exp_samples:
+          - labels: 'slo:sli_error:ratio_rate1h{service="checkout-api",slo="latency"}'
+            value: 1.999999999999993E-02
+      - expr: slo:sli_error:ratio_rate30d
+        eval_time: 5h
+        exp_samples:
+          - labels: 'slo:sli_error:ratio_rate30d{service="checkout-api",slo="latency"}'
+            value: 1.9999999999999928E-02
+    alert_rule_test:
+      - eval_time: 5h
+        alertname: CheckoutApiLatencyErrorBudgetWarningFast
+        exp_alerts: []
+      - eval_time: 5h
+        alertname: CheckoutApiLatencyErrorBudgetWarningSlow
+        exp_alerts:
+          - exp_labels: {service: checkout-api, slo: latency, severity: warning}
+            exp_annotations:
+              summary: checkout-api latency SLO is burning error budget too fast (WarningSlow)
+              description: "checkout-api latency SLO (99% of requests under 1000ms over 30d) is using its error budget at 1.0x the sustainable rate. Bad ratio over 6h: 2%."
